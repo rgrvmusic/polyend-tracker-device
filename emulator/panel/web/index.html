@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: MIT -->
+<!-- Copyright (c) 2026 Gerard Braad (Regroove | RGRV) -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Polyend Tracker headless</title>
+<style>
+  :root{
+    --accent:#CF1A37;
+    --accent-dark:#a01428;
+    --bg:#0a0a0a;
+    --bg-secondary:#1a1a1a;
+    --bg-tertiary:#2a2a2a;
+    --text-primary:#fff;
+    --text-secondary:#aaa;
+    --text-dim:#666;
+    --border:#333;
+    --green:#2f8f4e;
+    --amber:#ffb000;
+    --red:#b23b2e;
+    --mono:"JetBrains Mono","SF Mono","Fira Code",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg);color:var(--text-primary);font-family:var(--sans);
+    font-size:14px;line-height:1.4;
+  }
+  a{color:var(--accent);text-decoration:none}
+  .banner{
+    position:sticky;top:0;z-index:20;height:48px;display:flex;align-items:center;
+    justify-content:space-between;gap:16px;padding:0 16px;
+    background:var(--bg-secondary);border-bottom:1px solid var(--border);
+  }
+  .brand{display:flex;align-items:baseline;gap:10px;min-width:0}
+  .brand b{font-family:var(--mono);font-size:15px;letter-spacing:.08em;white-space:nowrap}
+  .brand span{font-family:var(--mono);font-size:11px;color:var(--text-secondary);white-space:nowrap}
+  .brand .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+  .status{display:flex;align-items:center;gap:14px;font-family:var(--mono);font-size:12px;color:var(--text-secondary);flex-wrap:wrap;justify-content:flex-end}
+  .status b{color:var(--text-primary);font-weight:500}
+  .pill{border:1px solid var(--border);border-radius:3px;padding:2px 7px;font-size:11px}
+  .pill.on{border-color:var(--green);color:#8ee6a8}
+  .pill.rec{border-color:var(--red);color:#ff9a8d}
+
+  .wrap{max-width:1180px;margin:0 auto;padding:16px 16px 40px;display:grid;
+    grid-template-columns:minmax(0,1fr) 360px;gap:16px}
+  .screen{grid-column:1;min-width:0}
+  .side{grid-column:2;display:flex;flex-direction:column;gap:16px}
+  @media (max-width:960px){
+    .wrap{grid-template-columns:minmax(0,1fr)}
+    .screen,.side{grid-column:1}
+  }
+
+  .card{background:var(--bg-secondary);border:1px solid var(--border);border-radius:4px}
+  .card h2{margin:0;padding:8px 12px;font-family:var(--mono);font-size:11px;
+    letter-spacing:.12em;text-transform:uppercase;color:var(--text-secondary);
+    border-bottom:1px solid var(--border);display:flex;justify-content:space-between;
+    align-items:center;gap:8px}
+  .card h2 em{font-style:normal;color:var(--text-dim)}
+  .card .body{padding:12px}
+
+  /* screen chrome */
+  .lcd{
+    background:#050805;border:1px solid #1d2a1d;border-radius:4px;padding:10px;
+    font-family:var(--mono);font-size:12px;color:#cfe8cf;
+  }
+  .lcd .lcdbar{display:flex;justify-content:space-between;gap:8px;color:#6f8a6f;
+    font-size:11px;padding:0 2px 8px;border-bottom:1px solid #1d2a1d;margin-bottom:8px}
+  .lcd .lcdbar b{color:var(--amber);font-weight:500}
+
+  /* pattern */
+  .patwrap{overflow:auto;max-height:530px}
+  table.pattern{border-collapse:collapse;width:100%;font-family:var(--mono);font-size:12px}
+  table.pattern th{position:sticky;top:0;background:var(--bg-secondary);z-index:2;
+    font-weight:500;font-size:10px;letter-spacing:.08em;color:var(--text-secondary);
+    padding:5px 4px;border-bottom:1px solid var(--border);text-align:left}
+  table.pattern th .mute{cursor:pointer;color:var(--text-dim);margin-left:6px}
+  table.pattern th .mute.on{color:var(--red)}
+  table.pattern td{padding:1px 2px;border-bottom:1px solid #141414;cursor:default;white-space:nowrap}
+  table.pattern td.rownum{color:var(--text-dim);padding-right:8px;font-size:11px;
+    position:sticky;left:0;background:var(--bg-secondary)}
+  table.pattern tr.beat td.rownum{color:var(--text-secondary)}
+  table.pattern tr.play td{background:#15200f}
+  table.pattern tr.play td.rownum{background:#15200f;color:var(--amber)}
+  table.pattern tr:hover td{background:#14181a}
+  table.pattern tr.play:hover td{background:#1a2913}
+  .cell{display:flex;gap:3px}
+  .cell span{padding:0 1px;border-bottom:1px solid transparent;min-width:12px}
+  .cell .note{color:#e8e8e8}
+  .cell .note.empty{color:#3a3a3a}
+  .cell .instr{color:#8fb7ff}
+  .cell .vol{color:#9bd49b}
+  .cell .fx{color:#d9a3e0}
+  .cell span.cur{border-bottom-color:var(--accent)}
+  .cell span.cur-f{background:#3a1519}
+
+  /* pads */
+  .pads{display:grid;grid-template-columns:repeat(12,1fr);gap:4px}
+  .pads button{
+    aspect-ratio:1.55/1;border:1px solid #252525;border-radius:3px;background:#111;
+    cursor:pointer;padding:0;position:relative;overflow:hidden;transition:transform .04s
+  }
+  .pads button:active{transform:scale(.96)}
+  .pads button .n{position:absolute;right:2px;bottom:1px;font-family:var(--mono);
+    font-size:8px;color:#3c4a3c;pointer-events:none}
+  .pads button.on{box-shadow:0 0 0 1px #fff inset}
+  .pads button:hover{border-color:#555}
+  .padlegend{display:flex;justify-content:space-between;margin-top:8px;
+    font-family:var(--mono);font-size:10px;color:var(--text-dim)}
+
+  /* buttons */
+  .btns{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
+  .btns button{
+    background:var(--bg-tertiary);border:1px solid #383838;border-radius:3px;
+    color:var(--text-secondary);font-family:var(--mono);font-size:10px;
+    padding:7px 2px;cursor:pointer;letter-spacing:.03em;white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis
+  }
+  .btns button:hover{border-color:#666;color:#fff}
+  .btns button.active{border-color:var(--accent);color:#fff;background:#2a1115}
+  .btns button.wide{grid-column:span 2}
+  .btns button.play{border-color:#2f5e3b;color:#9be0ad}
+  .btns button.play.active{background:#1d3a26;border-color:var(--green);color:#fff}
+  .btns button.rec{border-color:#5e2f2f;color:#e0a09b}
+  .btns button.rec.active{background:#3a1d1d;border-color:var(--red);color:#fff}
+
+  /* encoders */
+  .encs{display:flex;gap:10px;justify-content:space-between}
+  .enc{flex:1;text-align:center}
+  .enc .knob{
+    margin:0 auto;width:54px;height:54px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%,#3a3a3a,#161616 65%);
+    border:1px solid #444;display:flex;align-items:center;justify-content:center;
+    color:var(--text-secondary);font-family:var(--mono);font-size:10px;position:relative
+  }
+  .enc .knob:after{content:"";position:absolute;top:4px;left:50%;width:2px;height:12px;
+    background:var(--accent);transform:translateX(-50%);border-radius:1px}
+  .enc .lbl{font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-top:5px}
+  .enc .step{display:flex;gap:2px;margin-top:4px}
+  .enc .step button{flex:1;background:#222;border:1px solid #3a3a3a;color:#aaa;
+    border-radius:2px;cursor:pointer;font-family:var(--mono);font-size:11px;padding:2px 0}
+  .enc .step button:hover{background:#333;color:#fff}
+
+  /* nav */
+  .screens{display:flex;flex-wrap:wrap;gap:4px}
+  .screens button{flex:1 1 auto;background:transparent;border:1px solid var(--border);
+    color:var(--text-secondary);font-family:var(--mono);font-size:10px;padding:6px 8px;
+    border-radius:3px;cursor:pointer;letter-spacing:.05em;text-transform:uppercase}
+  .screens button:hover{color:#fff;border-color:#666}
+  .screens button.active{background:var(--accent);border-color:var(--accent);color:#fff}
+
+  /* generic panels */
+  .kv{display:grid;grid-template-columns:120px 1fr;gap:6px 12px;font-family:var(--mono);font-size:12px}
+  .kv label{color:var(--text-dim)}
+  .kv .v{color:var(--text-primary)}
+  .grid48{display:grid;grid-template-columns:repeat(8,1fr);gap:4px}
+  .grid48 button{background:var(--bg-tertiary);border:1px solid #333;border-radius:3px;
+    color:var(--text-secondary);font-family:var(--mono);font-size:10px;padding:6px 2px;
+    cursor:pointer;text-align:center}
+  .grid48 button:hover{border-color:#666}
+  .grid48 button.sel{border-color:var(--accent);color:#fff;background:#2a1115}
+  .grid48 button.used{color:#8fb7ff}
+  .wave{display:flex;align-items:center;gap:1px;height:64px;margin:8px 0;
+    background:#060a06;border:1px solid #1d2a1d;border-radius:3px;padding:4px}
+  .wave i{flex:1;background:#4f9a5f;min-width:1px;display:block}
+  .rowline{display:flex;justify-content:space-between;align-items:center;gap:8px;
+    padding:6px 0;border-bottom:1px solid #222;font-family:var(--mono);font-size:12px}
+  .rowline:last-child{border-bottom:0}
+  .rowline .name{color:var(--text-primary)}
+  .rowline .sub{color:var(--text-dim);font-size:11px}
+  .rowline button{background:#222;border:1px solid #3a3a3a;color:#bbb;
+    font-family:var(--mono);font-size:10px;padding:3px 8px;border-radius:2px;cursor:pointer}
+  .rowline button:hover{border-color:#777;color:#fff}
+  input[type=range]{width:100%;accent-color:var(--accent)}
+  .muted{color:var(--text-dim)}
+  .log{font-family:var(--mono);font-size:10px;color:var(--text-dim);
+    max-height:120px;overflow:auto;white-space:pre-wrap}
+  .footer{max-width:1180px;margin:0 auto;padding:0 16px 32px;color:var(--text-dim);
+    font-family:var(--mono);font-size:10px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  kbd{font-family:var(--mono);background:#222;border:1px solid #3a3a3a;border-radius:2px;
+    padding:0 4px;font-size:10px;color:#ccc}
+  .empty-note{color:var(--text-secondary);font-size:12px;padding:8px 0}
+  .badge{font-family:var(--mono);font-size:9px;border:1px solid #444;border-radius:2px;
+    padding:1px 4px;color:var(--text-dim)}
+</style>
+</head>
+<body>
+<header class="banner">
+  <div class="brand">
+    <span class="dot"></span>
+    <b>POLYEND TRACKER</b>
+    <span>headless · web face</span>
+  </div>
+  <div class="status">
+    <span>BPM <b id="st-bpm">120</b></span>
+    <span>ROW <b id="st-row">00</b>/<span id="st-steps">64</span></span>
+    <span id="st-play" class="pill">STOP</span>
+    <span id="st-rec" class="pill">REC OFF</span>
+    <span id="st-audio" class="pill">audio ?</span>
+    <span id="st-link" class="pill">connecting</span>
+  </div>
+</header>
+
+<div class="wrap">
+  <section class="screen card">
+    <h2><span id="scr-title">PATTERN</span><em id="scr-sub">Pattern 01 · 8 tracks · 64 steps</em></h2>
+    <div class="body" id="screen"></div>
+  </section>
+
+  <aside class="side">
+    <div class="card">
+      <h2>PADS <em id="pad-range">C-4 .. B-7</em></h2>
+      <div class="body">
+        <div class="pads" id="pads"></div>
+        <div class="padlegend"><span id="pad-left">4 × 12</span><span id="pad-right">shift+pad clears</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>CONTROLS</h2>
+      <div class="body">
+        <div class="btns" id="btns"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>ENCODERS <em id="enc-field">NOTE</em></h2>
+      <div class="body">
+        <div class="encs" id="encs"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>SCREENS</h2>
+      <div class="body">
+        <div class="screens" id="screens"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>LOG</h2>
+      <div class="body"><div class="log" id="log"></div></div>
+    </div>
+  </aside>
+</div>
+
+<div class="footer">
+  <span>keys: <kbd>←↑↓→</kbd> cursor · <kbd>space</kbd> play · <kbd>r</kbd> rec · <kbd>z s x d c v g b h n j m</kbd> notes · <kbd>q 2 w 3 e</kbd> octave above · <kbd>Shift</kbd>+pad clears</span>
+  <span id="foot">panel v?</span>
+</div>
+
+<script>
+"use strict";
+const $ = (s) => document.querySelector(s);
+const el = (tag, cls, text) => {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text !== undefined) n.textContent = text;
+  return n;
+};
+const NOTE = ["C-","C#","D-","D#","E-","F-","F#","G-","G#","A-","A#","B-"];
+const noteName = (n) => (n === null || n === undefined || n < 0)
+  ? "---" : NOTE[n % 12] + Math.floor(n / 12);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const pad2 = (n) => String(n).padStart(2, "0");
+
+const SCREENS = [
+  ["pattern","Pattern"],["song","Song"],["instrument","Instr"],
+  ["sample","Sample"],["master","Master"],["performance","Perf"],
+  ["file","File"],["config","Config"]
+];
+const BUTTONS = [
+  [8,"Params"], [9,"Perf"], [10,"File"], [11,"Config"], [12,"Master"],
+  [13,"Smpl"], [14,"Play s"], [15,"Edit"], [16,"Rec s"], [17,"Song"],
+  [18,"Note"], [19,"Instr"], [20,"Vol"], [21,"Fx"], [22,"Pattern"],
+  [23,"Play"], [24,"Copy"], [25,"Insert"], [26,"Up"], [27,"Del"],
+  [28,"Rec"], [29,"Shift"], [30,"Left"], [31,"Down"], [32,"Right"],
+  [33,"Enter"], [34,"Back"]
+];
+const FIELD_NAMES = ["note","instr","vol","fx"];
+const NOTE_KEYS = {
+  z:0,s:1,x:2,d:3,c:4,v:5,g:6,b:7,h:8,n:9,j:10,m:11,
+  q:12,"2":13,w:14,"3":15,e:16,r:17,"5":18,t:19,"6":20,y:21,"7":22,u:23
+};
+
+let S = null;          // last state
+let patternSig = "";   // avoids rebuilding the grid on every tick
+let pending = false;
+let shiftDown = false;
+let padDown = new Set();
+
+function req(obj) {
+  if (pending) { setTimeout(() => req(obj), 20); return; }
+  pending = true;
+  fetch("/req", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify(obj)
+  }).catch(() => {}).finally(() => { pending = false; });
+}
+const input = (kind, extra) => req(Object.assign({t:"input", kind}, extra));
+const pressButton = (id, state) => input("button", {id, state: state ? 1 : 0});
+const tapButton = (id) => { pressButton(id, 1); setTimeout(() => pressButton(id, 0), 30); };
+
+// ---------------------------------------------------------------- controls
+function buildControls() {
+  const pads = $("#pads");
+  pads.innerHTML = "";
+  // Four rows, low notes at the bottom: the same way up as a keyboard and as
+  // the Fire's grid.  DOM order is top row first, so row 3 is drawn first.
+  for (let r = 3; r >= 0; r--) {
+    for (let col = 0; col < 12; col++) {
+      const i = r * 12 + col;
+      const b = el("button");
+      b.dataset.pad = i;
+      b.appendChild(el("span", "n", String(i + 1)));
+    b.addEventListener("pointerdown", (ev) => {
+      ev.preventDefault();
+      shiftDown = shiftDown || ev.shiftKey;
+      padDown.add(i);
+      input("pad", {id:i, state:1, vel:100});
+    });
+    b.addEventListener("pointerup", () => { padDown.delete(i); input("pad", {id:i, state:0}); });
+    b.addEventListener("pointerleave", () => {
+      if (padDown.has(i)) { padDown.delete(i); input("pad", {id:i, state:0}); }
+    });
+      pads.appendChild(b);
+    }
+  }
+
+  const btns = $("#btns");
+  btns.innerHTML = "";
+  BUTTONS.forEach(([id, label]) => {
+    const b = el("button", id === 23 ? "play" : id === 28 ? "rec" : "", label);
+    b.dataset.button = id;
+    b.addEventListener("pointerdown", (ev) => {
+      ev.preventDefault();
+      if (ev.shiftKey) shiftDown = true;
+      pressButton(id, 1);
+    });
+    b.addEventListener("pointerup", () => pressButton(id, 0));
+    b.addEventListener("pointerleave", () => pressButton(id, 0));
+    btns.appendChild(b);
+  });
+
+  const encs = $("#encs");
+  encs.innerHTML = "";
+  const names = ["Note","Instr","Vol","Fx"];
+  names.forEach((nm, i) => {
+    const d = el("div", "enc");
+    d.appendChild(el("div", "knob", ""));
+    d.appendChild(el("div", "lbl", nm));
+    const step = el("div", "step");
+    const minus = el("button", "", "−");
+    const plus = el("button", "", "+");
+    minus.addEventListener("click", () => input("encoder", {delta:-1}));
+    plus.addEventListener("click", () => input("encoder", {delta:1}));
+    step.appendChild(minus); step.appendChild(plus);
+    d.appendChild(step);
+    encs.appendChild(d);
+  });
+
+  const scr = $("#screens");
+  scr.innerHTML = "";
+  SCREENS.forEach(([name, label]) => {
+    const b = el("button", "", label);
+    b.dataset.screen = name;
+    b.addEventListener("click", () => req({t:"screen", name}));
+    scr.appendChild(b);
+  });
+}
+
+function updateChrome() {
+  if (!S) return;
+  $("#st-bpm").textContent = S.tempo;
+  $("#st-row").textContent = pad2(S.playing ? S.play_row : S.cursor.row);
+  $("#st-steps").textContent = S.steps;
+  const p = $("#st-play");
+  p.textContent = S.playing ? "PLAY" : "STOP";
+  p.className = "pill" + (S.playing ? " on" : "");
+  const r = $("#st-rec");
+  r.textContent = S.rec ? "REC ON" : "REC OFF";
+  r.className = "pill" + (S.rec ? " rec" : "");
+  const a = $("#st-audio");
+  a.textContent = S.audio.error ? "audio error" : "audio " + (S.audio.sink.split(":")[0] || "none");
+  a.className = "pill" + (S.audio.error ? " rec" : S.audio.sink !== "none" ? " on" : "");
+  a.title = S.audio.error || S.audio.sink;
+  $("#foot").textContent = "panel v" + S.version + " · " + S.host;
+
+  document.querySelectorAll("#screens button").forEach(b =>
+    b.classList.toggle("active", b.dataset.screen === S.screen));
+  document.querySelectorAll("#btns button").forEach(b => {
+    const id = Number(b.dataset.button);
+    b.classList.toggle("active",
+      (id === 23 && S.playing) || (id === 28 && S.rec) ||
+      (S.shift && id === 29) ||
+      ([8,9,10,11,12,13,17,19,22].includes(id) && BUTTON_SCREEN[id] === S.screen));
+  });
+  $("#enc-field").textContent = S.field.toUpperCase();
+  $("#pad-range").textContent = noteName(S.pads.first_note) + " .. " +
+    noteName(S.pads.first_note + 47);
+  if (S.leds) {
+    document.querySelectorAll("#pads button").forEach((b) => {
+      const c = S.leds.pads[Number(b.dataset.pad)] || "#111";
+      b.style.background = c;
+      b.classList.toggle("on", c === "#f4f4f4" || c === "#ffb000");
+    });
+    document.querySelectorAll("#btns button").forEach(b => {
+      const c = S.leds.buttons[b.dataset.button];
+      if (c && c !== "#111111" && c !== "#111") b.style.background = c, b.style.color = "#0a0a0a";
+      else if (!b.classList.contains("active")) b.style.background = "", b.style.color = "";
+    });
+  }
+  $("#log").textContent = (S.log || []).map(l => l.text).join("\n");
+  $("#log").scrollTop = $("#log").scrollHeight;
+}
+
+const BUTTON_SCREEN = {8:"instrument",9:"performance",10:"file",11:"config",
+  12:"master",13:"sample",17:"song",19:"instrument",22:"pattern"};
+
+// ------------------------------------------------------------------ screens
+function screenPattern() {
+  const box = $("#screen");
+  const sig = JSON.stringify([S.pattern, S.cursor, S.track_mute, S.shift,
+                              S.steps, S.tracks]);
+  if (sig !== patternSig || !box.querySelector(".patwrap")) {
+    patternSig = sig;
+    buildPattern(box);
+  }
+  // The playhead moves at up to 10 Hz and the table does not need rebuilding
+  // for it: clear last frame's row and mark this one.
+  const wrap = box.querySelector(".patwrap");
+  if (!wrap) return;
+  wrap.querySelectorAll("tr.play").forEach(tr => tr.classList.remove("play"));
+  const playRow = wrap.querySelectorAll("tbody tr")[S.play_row];
+  if (S.playing && playRow) playRow.classList.add("play");
+
+  const cursorRow = wrap.querySelectorAll("tbody tr")[S.cursor.row];
+  if (cursorRow) {
+    const top = cursorRow.offsetTop - wrap.offsetTop;
+    if (top < wrap.scrollTop || top > wrap.scrollTop + wrap.clientHeight - 40) {
+      wrap.scrollTop = top - wrap.clientHeight / 2;
+    }
+  }
+}
+
+function buildPattern(box) {
+  const wrap = el("div", "patwrap");
+  const table = el("table", "pattern");
+  const thead = el("thead");
+  const hr = el("tr");
+  hr.appendChild(el("th", "", ""));
+  for (let t = 0; t < S.tracks; t++) {
+    const th = el("th");
+    th.appendChild(document.createTextNode("TRK " + pad2(t + 1)));
+    const m = el("span", "mute" + (S.track_mute[t] ? " on" : ""), "M");
+    m.title = "mute track " + (t + 1);
+    m.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      req({t:"set", path:"track_mute", track:t, value: !S.track_mute[t]});
+    });
+    th.appendChild(m);
+    hr.appendChild(th);
+  }
+  thead.appendChild(hr); table.appendChild(thead);
+
+  const tbody = el("tbody");
+  for (let r = 0; r < S.steps; r++) {
+    const tr = el("tr");
+    if (r % 4 === 0) tr.className = "beat";
+    const rn = el("td", "rownum", pad2(r));
+    tr.appendChild(rn);
+    for (let t = 0; t < S.tracks; t++) {
+      const cell = S.pattern[r][t];
+      const td = el("td");
+      const c = el("div", "cell");
+      const fields = [
+        ["note", noteName(cell[0]), cell[0] === null],
+        ["instr", cell[1] ? pad2(cell[1]) : "..", !cell[1]],
+        ["vol", c[2] !== 64 ? pad2(c[2]) : "..", c[2] === 64],
+        ["fx", cell[3] === null ? ".." : pad2(cell[3]), cell[3] === null],
+      ];
+      fields.forEach(([f, text, empty], fi) => {
+        const sp = el("span", f + (empty ? " empty" : ""), text);
+        if (r === S.cursor.row && t === S.cursor.track) {
+          if (fi === S.cursor.field) sp.classList.add("cur");
+          else sp.classList.add("cur-f");
+        }
+        sp.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          req({t:"set_cursor", row:r, track:t});
+          req({t:"focus", field:fi});
+        });
+        c.appendChild(sp);
+      });
+      td.appendChild(c);
+      tr.appendChild(td);
+    }
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  wrap.appendChild(table);
+  box.innerHTML = "";
+  box.appendChild(wrap);
+}
+
+function screenSong() {
+  const box = $("#screen");
+  box.innerHTML = "";
+  const hint = el("div", "empty-note",
+    "Song rows address the pattern list. One pattern exists in this basic setup.");
+  box.appendChild(hint);
+  const list = el("div");
+  S.song.forEach((pat, i) => {
+    const line = el("div", "rowline");
+    const name = el("span", "name", pad2(i) + "  →  Pattern " + pad2(pat + 1));
+    const sub = el("span", "sub", i === S.song_row ? "cursor" : "");
+    line.appendChild(name); line.appendChild(sub);
+    line.addEventListener("click", () => req({t:"set", path:"song_row", value:i}));
+    list.appendChild(line);
+  });
+  box.appendChild(list);
+  const add = el("div", "rowline");
+  const b = el("button", "", "Play from start");
+  b.addEventListener("click", () => req({t:"transport", action:"play"}));
+  add.appendChild(el("span", "sub", "transport"));
+  add.appendChild(b);
+  box.appendChild(add);
+}
+
+function waveBars(peaks, cls) {
+  const w = el("div", "wave");
+  (peaks || []).forEach(p => {
+    const i = el("i");
+    i.style.height = Math.max(2, p) + "%";
+    w.appendChild(i);
+  });
+  return w;
+}
+
+function screenInstrument() {
+  const box = $("#screen");
+  const sig = JSON.stringify([S.selected_instrument, S.field, S.instruments.map(i => [i.slot,i.volume,i.tune,i.filter,i.length])]);
+  if (box.dataset.sig === sig) return;
+  box.dataset.sig = sig;
+  box.innerHTML = "";
+  const grid = el("div", "grid48");
+  S.instruments.forEach(ins => {
+    const b = el("button", (ins.slot === S.selected_instrument ? "sel " : "") +
+      (ins.wave ? "used" : ""), pad2(ins.slot));
+    b.title = ins.name.trim() || "empty";
+    b.addEventListener("click", () => {
+      req({t:"set", path:"selected_instrument", value: ins.slot});
+      req({t:"mark", text:"instrument " + pad2(ins.slot) + " selected"});
+    });
+    grid.appendChild(b);
+  });
+  box.appendChild(grid);
+  const ins = S.instruments[S.selected_instrument - 1];
+  const kv = el("div", "kv");
+  kv.style.marginTop = "12px";
+  [["name", ins.name.trim() || "EMPTY"], ["wave", ins.wave || "-"],
+   ["volume", ins.volume + " %"], ["tune", ins.tune + " st"],
+   ["filter", ins.filter], ["length", ins.length + " samples"]].forEach(([k,v]) => {
+    kv.appendChild(el("label", "", k));
+    kv.appendChild(el("span", "v", String(v)));
+  });
+  box.appendChild(kv);
+  box.appendChild(waveBars(ins.peaks));
+}
+
+function screenSample() {
+  const box = $("#screen");
+  const sig = JSON.stringify([S.selected_instrument,
+    S.instruments[S.selected_instrument - 1].peaks]);
+  if (box.dataset.sig === sig) return;
+  box.dataset.sig = sig;
+  box.innerHTML = "";
+  const ins = S.instruments[S.selected_instrument - 1];
+  box.appendChild(waveBars(ins.peaks));
+  const kv = el("div", "kv");
+  [["slot", pad2(ins.slot)], ["name", ins.name.trim()],
+   ["source", ins.wave ? "built-in " + ins.wave : "empty"],
+   ["length", ins.length + " samples"], ["base", "C-5 / MIDI 60"]].forEach(([k,v]) => {
+    kv.appendChild(el("label", "", k)); kv.appendChild(el("span", "v", String(v)));
+  });
+  box.appendChild(kv);
+  const act = el("div", "rowline");
+  const b = el("button", "", "Preview C-5");
+  b.addEventListener("click", () => input("note", {note:60, on:true, vel:100}));
+  act.appendChild(el("span", "sub", "sample load / record is not implemented"));
+  act.appendChild(b);
+  box.appendChild(act);
+}
+
+function screenMaster() {
+  const box = $("#screen");
+  box.innerHTML = "";
+  const kv = el("div", "kv");
+  kv.appendChild(el("label", "", "master"));
+  const wrap = el("div");
+  const range = el("input");
+  range.type = "range"; range.min = 0; range.max = 100; range.value = S.master;
+  range.addEventListener("change", () =>
+    req({t:"set", path:"master", value:Number(range.value)}));
+  wrap.appendChild(range);
+  kv.appendChild(wrap);
+  kv.appendChild(el("label", "", "tempo"));
+  const tw = el("div");
+  const tr = el("input");
+  tr.type = "range"; tr.min = 20; tr.max = 300; tr.value = S.tempo;
+  tr.addEventListener("change", () =>
+    req({t:"set", path:"tempo", value:Number(tr.value)}));
+  tw.appendChild(tr);
+  kv.appendChild(tw);
+  box.appendChild(kv);
+  const line = el("div", "rowline");
+  line.appendChild(el("span", "sub", "audio sink"));
+  line.appendChild(el("span", "name", S.audio.sink));
+  box.appendChild(line);
+  const dl = el("div", "rowline");
+  const a = el("a", "", "download pattern as wav");
+  a.href = "/audio.wav";
+  dl.appendChild(el("span", "sub", "offline render"));
+  dl.appendChild(a);
+  box.appendChild(dl);
+}
+
+function screenPerformance() {
+  const box = $("#screen");
+  box.innerHTML = "";
+  const hint = el("div", "empty-note", "Track level and mute. Shift+encoder on the panel jumps; here it is a slider.");
+  box.appendChild(hint);
+  for (let t = 0; t < S.tracks; t++) {
+    const line = el("div", "rowline");
+    line.appendChild(el("span", "name", "TRK " + pad2(t + 1)));
+    const mid = el("span");
+    const r = el("input");
+    r.type = "range"; r.min = 0; r.max = 100; r.value = S.track_vol[t];
+    r.style.width = "140px";
+    r.addEventListener("change", () => req({t:"set", path:"track_vol",
+      track:t, value:Number(r.value)}));
+    mid.appendChild(r);
+    line.appendChild(mid);
+    const m = el("button", S.track_mute[t] ? "on" : "", S.track_mute[t] ? "MUTED" : "MUTE");
+    m.addEventListener("click", () => req({t:"set", path:"track_mute",
+      track:t, value:!S.track_mute[t]}));
+    line.appendChild(m);
+    box.appendChild(line);
+  }
+}
+
+function screenConfig() {
+  const box = $("#screen");
+  box.innerHTML = "";
+  const kv = el("div", "kv");
+  [["host", S.host], ["panel", "v" + S.version], ["backend", "c"],
+   ["audio", S.audio.sink], ["pads", "4 × 12, " + noteName(S.pads.first_note) + " root"],
+   ["screen", S.screen], ["shift", S.shift ? "held" : "released"]].forEach(([k,v]) => {
+    kv.appendChild(el("label", "", k)); kv.appendChild(el("span", "v", String(v)));
+  });
+  box.appendChild(kv);
+  const line = el("div", "rowline");
+  line.appendChild(el("span", "sub", "edit step"));
+  const b = el("button", "", S.edit_step + " row(s)");
+  b.addEventListener("click", () => req({t:"set", path:"edit_step",
+    value:(S.edit_step % 4) + 1}));
+  line.appendChild(b);
+  box.appendChild(line);
+  const line2 = el("div", "rowline");
+  line2.appendChild(el("span", "sub", "Octave / pad page"));
+  const b2 = el("button", "", "page " + (S.pads.page + 1));
+  b2.addEventListener("click", () => req({t:"set", path:"pads_root",
+    value: S.pads.page === 0 ? 60 : 48}));
+  line2.appendChild(b2);
+  box.appendChild(line2);
+}
+
+function screenFile() {
+  const box = $("#screen");
+  box.innerHTML = "";
+  const hint = el("div", "empty-note",
+    "Project file I/O is not implemented in this basic setup. The pattern is held in memory; " +
+    "GET /state is a complete machine-readable copy.");
+  box.appendChild(hint);
+  const line = el("div", "rowline");
+  line.appendChild(el("span", "sub", "machine-readable state"));
+  line.appendChild(el("span", "name", "GET /state"));
+  box.appendChild(line);
+  const line2 = el("div", "rowline");
+  line2.appendChild(el("span", "sub", "line-JSON door"));
+  line2.appendChild(el("span", "name", "port 8893"));
+  box.appendChild(line2);
+  const line3 = el("div", "rowline");
+  line3.appendChild(el("span", "sub", "pattern audio"));
+  const a = el("a", "", "GET /audio.wav");
+  a.href = "/audio.wav";
+  line3.appendChild(a);
+  box.appendChild(line3);
+}
+
+function renderScreen() {
+  if (!S) return;
+  const titles = {pattern:"PATTERN", song:"SONG", instrument:"INSTRUMENT",
+    sample:"SAMPLE", master:"MASTER", performance:"PERFORMANCE",
+    file:"FILE", config:"CONFIG"};
+  $("#scr-title").textContent = titles[S.screen] || S.screen.toUpperCase();
+  $("#scr-sub").textContent = S.screen === "pattern"
+    ? S.pattern_name + " · " + S.tracks + " tracks · " + S.steps + " steps · row " +
+      pad2(S.cursor.row) + " track " + pad2(S.cursor.track + 1)
+    : "cursor row " + pad2(S.cursor.row) + " · track " + pad2(S.cursor.track + 1) +
+      " · field " + S.field;
+  const box = $("#screen");
+  if (S.screen === "pattern") screenPattern();
+  else { box.dataset.sig = ""; patternSig = ""; }
+  if (S.screen === "song") screenSong();
+  else if (S.screen === "instrument") screenInstrument();
+  else if (S.screen === "sample") screenSample();
+  else if (S.screen === "master") screenMaster();
+  else if (S.screen === "performance") screenPerformance();
+  else if (S.screen === "config") screenConfig();
+  else if (S.screen === "file") screenFile();
+}
+
+function render() {
+  updateChrome();
+  renderScreen();
+}
+
+// ------------------------------------------------------------------- wiring
+function connect() {
+  const es = new EventSource("/events");
+  es.onopen = () => {
+    const l = $("#st-link");
+    l.textContent = "live"; l.className = "pill on";
+  };
+  es.onerror = () => {
+    const l = $("#st-link");
+    l.textContent = "reconnecting"; l.className = "pill rec";
+  };
+  es.onmessage = (ev) => {
+    try {
+      const o = JSON.parse(ev.data);
+      if (o && o.t) { render(); return; }   // hello / non-state event
+      S = o;
+      render();
+    } catch (e) { /* ignore malformed */ }
+  };
+}
+
+document.addEventListener("keydown", (ev) => {
+  if (ev.target && /input|textarea|select/i.test(ev.target.tagName)) return;
+  if (ev.key === "Shift") { shiftDown = true; pressButton(29, 1); return; }
+  const k = ev.key.toLowerCase();
+  if (k === " ") { ev.preventDefault(); req({t:"transport", action:"toggle"}); return; }
+  if (k === "r") { req({t:"transport", action:"rec"}); return; }
+  if (k === "p") { req({t:"transport", action:"play"}); return; }
+  if (ev.key === "ArrowUp") { ev.preventDefault(); tapButton(26); return; }
+  if (ev.key === "ArrowDown") { ev.preventDefault(); tapButton(31); return; }
+  if (ev.key === "ArrowLeft") { ev.preventDefault(); tapButton(30); return; }
+  if (ev.key === "ArrowRight") { ev.preventDefault(); tapButton(32); return; }
+  if (ev.key === "Insert") { tapButton(25); return; }
+  if (ev.key === "Delete") { tapButton(27); return; }
+  if (ev.key === "Enter") { tapButton(33); return; }
+  if (ev.key === "Escape") { tapButton(34); return; }
+  if (k in NOTE_KEYS && S) {
+    const note = S.pads.first_note + NOTE_KEYS[k];
+    if (S.screen === "pattern" && S.cursor.field === 0) {
+      req({t:"cell", row:S.cursor.row, track:S.cursor.track, note,
+           instr:S.selected_instrument});
+      tapButton(31); // next row via engine keeps the backend the single writer
+    } else {
+      input("note", {note, on:true, vel:100});
+    }
+  }
+});
+document.addEventListener("keyup", (ev) => {
+  if (ev.key === "Shift") { shiftDown = false; pressButton(29, 0); }
+});
+
+buildControls();
+connect();
+setInterval(() => { if (S) render(); }, 500); // keep clock/row live if SSE is quiet
+</script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+# build output
+emulator/build/
+emulator/firmware/build/
+emulator/firmware/tracker-firmware
+emulator/firmware/tracker-firmware-*
+android/build/
+android/app/build/
+android/app/.cxx/
+android/.gradle/
+android/local.properties
+android/runtime/
+android/app/src/main/assets/runtime/
+# build dependencies, kept out of the repo; no trailing slash, so a symlink
+# to a checkout is ignored too
+.toolchain
+third_party
+sysroot
+# editor and OS noise
+*.o
+*.so
+*.core
+*.swp
+.DS_Store

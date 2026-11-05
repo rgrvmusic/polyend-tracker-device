@@ -1,0 +1,887 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: MIT -->
+<!-- Copyright (c) 2026 Gerard Braad (Regroove | RGRV) -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#CF1A37">
+<link rel="icon" href="data:,">
+<title>Polyend Tracker Native</title>
+<style>
+/* Shared tokens: accent, three greys, 48px banner and 6px section. The
+   tracker's own face is monospace because it renders the firmware's display
+   list, not a control surface. */
+:root {
+  --accent: #CF1A37;
+  --accent-dark: #a01428;
+  --bg: #0a0a0a;
+  --bg-secondary: #1a1a1a;
+  --bg-tertiary: #2a2a2a;
+  --text-primary: #ffffff;
+  --text-secondary: #aaaaaa;
+  --border: #333333;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  --pot: 60px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text-primary);
+  font-family: var(--sans);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Banner ─────────────────────────────────────────────────── */
+.top-banner {
+  background: var(--accent);
+  height: 48px; padding: 0 16px;
+  display: flex; align-items: center; gap: 12px;
+  flex-shrink: 0; box-shadow: 0 2px 10px rgba(0,0,0,.5);
+  position: sticky; top: 0; z-index: 100;
+}
+.banner-title {
+  font-size: 1.1em; font-weight: bold; flex: 1;
+  text-transform: uppercase; letter-spacing: 3px;
+}
+.connection-indicator {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 0.75em; text-transform: uppercase; letter-spacing: 1px;
+  font-family: var(--mono);
+}
+.indicator-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #666; display: inline-block;
+}
+.connection-indicator.connected .indicator-dot { background: #00FF00; }
+.indicator-text { color: #aaa; white-space: nowrap; }
+.connection-indicator.connected .indicator-text { color: #00FF00; }
+@media (max-width: 600px) {
+  .banner-title { font-size: 1em; letter-spacing: 2px; }
+  .connection-indicator { display: none; }
+}
+
+/* ── Navigation ─────────────────────────────────────────────── */
+.hamburger {
+  background: none; border: none; color: #fff;
+  font-size: 1.8em; line-height: 1; cursor: pointer;
+  padding: 5px 10px; width: auto; transition: opacity .2s;
+}
+.hamburger:hover { opacity: .8; }
+.hamburger:active, .hamburger:focus { background: none; outline: none; }
+.menu-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(0,0,0,.55);
+  opacity: 0; pointer-events: none; transition: opacity .3s ease;
+}
+.menu-overlay.active { opacity: 1; pointer-events: auto; }
+.menu-panel {
+  position: fixed; top: 0; bottom: 0; left: 0; z-index: 201;
+  width: min(300px, 86vw); padding: 12px;
+  background: var(--bg-secondary); border-right: 1px solid var(--border);
+  transform: translateX(-100%); transition: transform .3s ease;
+  display: flex; flex-direction: column;
+}
+.menu-panel.open { transform: translateX(0); box-shadow: 2px 0 18px rgba(0,0,0,.6); }
+.menu-close {
+  align-self: flex-end; padding: 0 6px; background: none; border: none;
+  color: var(--text-secondary); font-size: 2em; line-height: 1; cursor: pointer;
+}
+.menu-close:hover { color: var(--text-primary); }
+.menu-items { flex: 1; overflow-y: auto; margin-top: 4px; }
+.nav-item {
+  display: block; width: 100%; padding: 15px 20px; margin-bottom: 10px;
+  background: var(--bg-tertiary); border: 1px solid var(--border);
+  color: var(--text-primary); cursor: pointer; text-align: left;
+  border-radius: 5px; transition: background .2s;
+}
+.nav-item:hover { background: #3a3a3a; }
+.nav-item.active { background: #0066FF; border-color: #0066FF; color: #fff; }
+
+/* Main is the instrument: display, pads and keys. Debug is the wire under it. */
+.scene { display: none; flex: 1; }
+.scene.active { display: block; }
+.scene #log { max-height: 68vh; }
+
+/* ── Layout ─────────────────────────────────────────────────── */
+.content {
+  flex: 1; display: grid; gap: 12px; padding: 12px;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  width: 100%; max-width: 1400px; margin: 0 auto;
+}
+.section {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px; padding: 12px;
+  min-width: 0;
+}
+.section-title {
+  font-size: 0.65em; color: var(--text-secondary);
+  text-transform: uppercase; letter-spacing: 2px; margin-bottom: 10px;
+  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+}
+.section-title .hint {
+  letter-spacing: 0; text-transform: none; font-size: 1.15em;
+  font-family: var(--mono);
+}
+.status-line {
+  font-size: 0.75em; color: var(--text-secondary);
+  letter-spacing: 1px; font-family: var(--mono);
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.status-line b { color: var(--text-primary); font-weight: 600; }
+.dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: rgba(255,255,255,.4); display: inline-block;
+}
+.dot.live { background: #4ade80; box-shadow: 0 0 6px #4ade80; }
+.dot.dead { background: #fff; }
+.note {
+  font-size: 0.7em; color: var(--text-secondary); line-height: 1.55;
+  margin-top: 8px; overflow-wrap: anywhere;
+}
+.note a { color: var(--accent); text-decoration: none; }
+.row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.row + .row { margin-top: 8px; }
+.lbl {
+  font-size: 0.65em; color: var(--text-secondary);
+  text-transform: uppercase; letter-spacing: 1px;
+}
+
+/* ── The firmware's 800x480 panel ───────────────────────────── */
+.lcd-bezel {
+  background: #060606; border: 1px solid var(--border); border-radius: 4px;
+  padding: 10px; max-width: 840px; margin: 0 auto;
+}
+.lcd-bezel canvas {
+  display: block; width: 100%; height: auto; aspect-ratio: 800/480;
+  background: #000; border-radius: 2px; cursor: crosshair;
+}
+.lcd-bezel.hidden { display: none; }
+.textface {
+  display: none; background: #060606; border: 1px solid var(--border);
+  border-radius: 4px; padding: 10px; margin: 0 auto; max-width: 840px;
+  /* The same panel as the bezel: a fixed 800x480 box, so the face switch
+     never changes the height of the screen section. */
+  width: 100%; aspect-ratio: 800 / 480;
+  color: #cfe6cf; font-family: var(--mono);
+  /* 80 columns should fill the bezel, not sit in 70% of it: a monospace
+     advance is ~0.6em, so the 80-column row needs width/48. */
+  font-size: clamp(9px, 1.95vw, 16.5px); line-height: 1.12;
+  white-space: pre; overflow: auto; height: auto;
+}
+.textface.on { display: block; }
+
+/* ── Keys ───────────────────────────────────────────────────── */
+.keys { display: flex; gap: 6px; flex-wrap: wrap; }
+.key {
+  padding: 9px 13px; background: #1e1e1e; border: 1px solid #333;
+  color: var(--text-secondary); border-radius: 4px; cursor: pointer;
+  font-family: var(--sans); font-size: 0.68em; letter-spacing: 1px;
+  text-transform: uppercase; transition: all .12s;
+}
+.key:hover { border-color: #555; color: var(--text-primary); }
+.key:active, .key.on {
+  background: var(--accent); border-color: var(--accent-dark); color: #fff;
+}
+/* The eight screen buttons sit under the display, as on the instrument. */
+.softs {
+  display: grid; grid-template-columns: repeat(8, minmax(0,1fr));
+  gap: 6px; max-width: 840px; margin: 8px auto 0;
+}
+.softs .key { padding: 9px 2px; text-align: center; }
+/* The keys on the instrument are square; the right column's grid follows it. */
+.btns, .nav { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 6px; }
+.nav { margin-top: 6px; }
+.btns .key, .nav .key {
+  aspect-ratio: 1; padding: 4px; text-align: center;
+  display: flex; align-items: center; justify-content: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.btns .key { font-size: 0.62em; letter-spacing: .3px; }
+
+/* ── Pads ───────────────────────────────────────────────────── */
+.pads-scroll { overflow-x: auto; }
+.pads-grid {
+  display: grid; grid-template-columns: repeat(12, minmax(0,1fr));
+  gap: 6px; min-width: 620px;
+  --pad-h: clamp(36px, 6vh, 64px);
+}
+.pad {
+  position: relative; height: var(--pad-h); min-width: 0; padding: 0;
+  background: #6b7b8c; border: 3px solid #1a2a3a; border-radius: 6px;
+  cursor: pointer; color: #d0d0d0; font-family: var(--sans); overflow: hidden;
+  transition: background .06s;
+}
+.pad:hover { background: #7b8b9c; border-color: #2a3a4a; }
+.pad .num {
+  position: absolute; top: 3px; left: 6px;
+  font-family: var(--mono); font-size: clamp(9px, 1.1vh, 12px);
+  color: #2a3a4a;
+}
+.pad.active { background: #4a9eff; border-color: #000; }
+.pad.active .num { color: #fff; }
+
+/* ── Pots ───────────────────────────────────────────────────── */
+/* The knob is an inlined SVG (body, cap; a needle only for a control that
+   holds a position). The jog is an endless encoder, so it gets body and cap,
+   no marker. */
+.pots { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+.pot {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  flex: 0 0 auto; width: var(--pot); min-width: var(--pot);
+}
+.knob { display: block; width: var(--pot); height: var(--pot); cursor: grab; touch-action: none; }
+.knob.dragging { cursor: grabbing; }
+.pot-label {
+  display: flex; align-items: flex-end; justify-content: center;
+  min-height: 1.2em; width: calc(var(--pot) + 12px);
+  font-size: 0.6em; color: var(--text-secondary);
+  text-transform: uppercase; letter-spacing: 1px; text-align: center;
+  white-space: nowrap;
+}
+.pot-val { font-family: var(--mono); font-size: 0.66em; color: var(--accent); }
+/* ── Chassis ────────────────────────────────────────────────── */
+/* As the manual draws the instrument: the display with its screen buttons
+   under it and the pads beneath, the dedicated keys and the jog at the right. */
+.chassis {
+  display: grid; grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 12px; align-items: stretch;
+}
+.ch-left, .ch-side { display: grid; gap: 12px; min-width: 0; }
+/* The jog sits with the keys it drives, at the foot of the controls. */
+.jog { margin-top: 14px; text-align: center; }
+.jog .pot { margin: 0 auto; }
+@media (max-width: 960px) {
+  .chassis { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ── Log ────────────────────────────────────────────────────── */
+.log {
+  font-family: var(--mono); font-size: 0.72em; line-height: 1.5;
+  color: var(--text-secondary); max-height: 120px; overflow-y: auto;
+  white-space: pre-wrap; border-top: 1px solid var(--border); padding-top: 6px;
+  margin-top: 8px;
+}
+
+@media (max-width: 600px) {
+  .section { padding: 10px; }
+  .btns { grid-template-columns: repeat(3, minmax(0,1fr)); }
+  .textface { font-size: 9px; }
+}
+</style>
+</head>
+<body>
+
+<div class="top-banner">
+  <button class="hamburger" id="menu-btn" type="button"
+          aria-controls="menu" aria-expanded="false"
+          aria-label="Open the navigation" title="Open the navigation">&#9776;</button>
+  <span class="banner-title">Polyend Tracker Native</span>
+  <span class="connection-indicator" id="st-link">
+    <span class="indicator-dot"></span>
+    <span class="indicator-text">connecting</span>
+  </span>
+</div>
+
+<div class="menu-overlay" id="menu-overlay"></div>
+<nav class="menu-panel" id="menu" aria-label="Views" aria-hidden="true">
+  <button class="menu-close" id="menu-close" type="button"
+          aria-label="Close the navigation">&times;</button>
+  <div class="menu-items">
+    <button class="nav-item active" data-scene="main" type="button">Main</button>
+    <button class="nav-item" data-scene="debug" type="button">Debug</button>
+  </div>
+</nav>
+
+<div class="scene active" id="scene-main">
+<div class="content">
+  <div class="chassis">
+    <div class="ch-left">
+      <div class="section">
+        <div class="section-title">Screen</div>
+        <div class="lcd-bezel"><canvas id="screen" width="800" height="480"></canvas></div>
+        <pre class="textface" id="textface"></pre>
+        <div class="softs" id="softs"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Pads</div>
+        <div class="pads-scroll"><div class="pads-grid" id="pads"></div></div>
+      </div>
+    </div>
+
+    <div class="ch-side">
+      <div class="section">
+        <div class="section-title">Face</div>
+        <div class="keys" id="face-tabs">
+          <button class="key on" data-face="draw" type="button">Draw list</button>
+          <button class="key" data-face="text" type="button">Text</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Controls</div>
+        <div class="btns" id="btns"></div>
+        <div class="nav" id="nav"></div>
+        <div class="jog">
+          <div class="pot" id="knob-pot" style="--pot:112px">
+            <div id="knob"></div>
+            <div class="pot-label">Jog</div>
+            <div class="pot-val" id="enc-last">0</div>
+          </div>
+          <div class="keys" style="margin-top:8px;justify-content:center">
+            <button class="key" id="jog-minus" type="button">−</button>
+            <button class="key" id="jog-plus" type="button">+</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="scene" id="scene-debug">
+<div class="content">
+  <div class="section">
+    <div class="section-title">Link <span class="hint">firmware doors</span></div>
+    <div class="status-line">
+      <span class="dot" id="link-dot"></span>
+      <span id="st-link-text">connecting</span>
+      <span>FRAME <b id="st-seq">–</b></span>
+      <span>OPS <b id="st-ops">–</b></span>
+      <span>FPS <b id="st-fps">–</b></span>
+      <span>PAD <b id="pad-last">–</b></span>
+    </div>
+    <div class="note">
+      <a href="/state">/state</a> draw list · <a href="/text">/text</a> character grid ·
+      <a href="/events">/events</a> SSE · <code>POST /req</code> input<br>
+      keys: ←↑↓→ cursor · space play · r rec · Shift shift · Backspace delete
+    </div>
+    <div class="log" id="log"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Firmware</div>
+    <div class="keys">
+      <button class="key" id="restart" type="button">Restart</button>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+"use strict";
+const $ = (s) => document.querySelector(s);
+const el = (tag, cls, text) => {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text !== undefined) n.textContent = text;
+  return n;
+};
+
+// Firmware button ids (mtInterfaceButtonsDef).  0..7 are the eight soft keys
+// drawn by the UI; 8..22 the mode row; 23..32 transport and navigation.
+const SOFT = [0,1,2,3,4,5,6,7];
+// The silkscreen order from the manual's front-panel diagram: the 5x3 module
+// matrix, then the 5x2 block of Play/Copy/Insert/Up/Delete over
+// Rec/Shift/Left/Down/Right.
+const BUTTONS = [
+  [8,"Params","Instrument Parameters"],[9,"Perform","Perform"],[10,"File","File"],
+  [11,"Config","Config"],[12,"Master","Master"],
+  [13,"Load","Sample Loader"],[14,"Playback","Sample Playback"],[15,"Editor","Sample Editor"],
+  [16,"Recorder","Sample Recorder"],[17,"Song","Song"],
+  [18,"Note","Note"],[19,"Instr","Instrument"],[21,"FX1","Effect 1"],[20,"FX2","Effect 2"],
+  [22,"Pattern","Pattern"]
+];
+const NAV = [
+  [23,"Play"],[24,"Copy"],[25,"Insert"],[26,"Up"],[27,"Delete"],
+  [28,"Rec"],[29,"Shift"],[30,"Left"],[31,"Down"],[32,"Right"]
+];
+
+const canvas = $("#screen");
+const ctx = canvas.getContext("2d");
+const DPR = Math.min(2, window.devicePixelRatio || 1);
+canvas.width = 800 * DPR;
+canvas.height = 480 * DPR;
+
+let S = null;            // last frame
+let lastSeq = 0;
+let clipDepth = 0;
+let frames = 0, fpsAt = performance.now(), fps = 0;
+let lastEncoder = 0;
+
+function log(msg) {
+  const box = $("#log");
+  box.textContent += (box.textContent ? "\n" : "") + msg;
+  box.scrollTop = box.scrollHeight;
+}
+
+// --- the knob -------------------------------------------------------------
+// Body and cap only. The jog is an endless encoder, so it has no needle; a
+// marker would claim a position it does not hold.
+function knobSvg() {
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", "0 0 120 120");
+  svg.setAttribute("class", "knob");
+  const body = document.createElementNS(ns, "circle");
+  body.setAttribute("cx", "60"); body.setAttribute("cy", "60"); body.setAttribute("r", "57");
+  body.setAttribute("fill", "#2a2a2a"); body.setAttribute("stroke", "#444444");
+  body.setAttribute("stroke-width", "3");
+  const cap = document.createElementNS(ns, "circle");
+  cap.setAttribute("cx", "60"); cap.setAttribute("cy", "60"); cap.setAttribute("r", "22");
+  cap.setAttribute("fill", "#555555");
+  svg.append(body, cap);
+  return svg;
+}
+
+// --- input ---------------------------------------------------------------
+function req(obj) {
+  // The door takes one request at a time; a held key must not drop the press.
+  fetch("/req", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(obj)
+  }).catch(() => {});
+}
+const press = (id, down) => req({t:"button", button:id, action: down ? "press" : "release"});
+const padPress = (id, down) => req({t:"pad", pad:id, action: down ? "press" : "release"});
+// The firmware holds a switch until its release arrives.  A page that is
+// closed, reloaded or blurred mid-press would leave that switch down, and a
+// held Rec or Shift silently changes what Play does (live rec instead of
+// stop), so every way out of the page clears the switches.
+function releaseAll() {
+  req({t:"release-all"});
+  if (navigator.sendBeacon)
+    navigator.sendBeacon("/req", JSON.stringify({t:"release-all"}));
+}
+addEventListener("pagehide", releaseAll);
+addEventListener("blur", releaseAll);
+document.addEventListener("visibilitychange", () => { if (document.hidden) releaseAll(); });
+const jog = (delta) => {
+  if (!delta) return;
+  lastEncoder += delta;
+  $("#enc-last").textContent = lastEncoder;
+  req({t:"encoder", delta});
+};
+
+function holdButton(node, id) {
+  node.addEventListener("pointerdown", (ev) => {
+    ev.preventDefault();
+    node.classList.add("on");
+    press(id, true);
+  });
+  const up = () => { node.classList.remove("on"); press(id, false); };
+  node.addEventListener("pointerup", up);
+  node.addEventListener("pointerleave", up);
+  node.addEventListener("pointercancel", up);
+}
+
+function buildControls() {
+  const softs = $("#softs");
+  SOFT.forEach((id) => {
+    const b = el("button", "key", "F" + (id + 1));
+    b.type = "button";
+    b.title = "soft key " + (id + 1);
+    holdButton(b, id);
+    softs.appendChild(b);
+  });
+
+  const btns = $("#btns");
+  BUTTONS.forEach(([id, label, title]) => {
+    const b = el("button", "key", label);
+    b.type = "button";
+    if (title) b.title = title;
+    holdButton(b, id);
+    btns.appendChild(b);
+  });
+
+  const nav = $("#nav");
+  NAV.forEach(([id, label]) => {
+    const b = el("button", "key", label);
+    b.type = "button";
+    holdButton(b, id);
+    nav.appendChild(b);
+  });
+
+  const pads = $("#pads");
+  // Four rows of twelve; pad 0 is the bottom-left and notes rise upwards.
+  for (let r = 3; r >= 0; r--) {
+    for (let col = 0; col < 12; col++) {
+      const i = r * 12 + col;
+      const b = el("button", "pad");
+      b.type = "button";
+      b.appendChild(el("span", "num", String(i + 1)));
+      b.addEventListener("pointerdown", (ev) => {
+        ev.preventDefault();
+        b.classList.add("active");
+        $("#pad-last").textContent = "pad " + i;
+        padPress(i, true);
+      });
+      const up = () => { b.classList.remove("active"); padPress(i, false); };
+      b.addEventListener("pointerup", up);
+      b.addEventListener("pointerleave", up);
+      b.addEventListener("pointercancel", up);
+      pads.appendChild(b);
+    }
+  }
+
+  const knob = knobSvg();
+  $("#knob").appendChild(knob);
+  let drag = null;
+  knob.addEventListener("pointerdown", (ev) => {
+    drag = ev.clientY;
+    knob.classList.add("dragging");
+    knob.setPointerCapture(ev.pointerId);
+  });
+  knob.addEventListener("pointermove", (ev) => {
+    if (drag === null) return;
+    const dy = drag - ev.clientY;
+    if (Math.abs(dy) >= 18) { jog(Math.sign(dy)); drag = ev.clientY; }
+  });
+  const endDrag = () => { drag = null; knob.classList.remove("dragging"); };
+  knob.addEventListener("pointerup", endDrag);
+  knob.addEventListener("pointercancel", endDrag);
+  knob.addEventListener("wheel", (ev) => { ev.preventDefault(); jog(Math.sign(-ev.deltaY)); }, {passive:false});
+  $("#jog-minus").addEventListener("click", () => jog(-1));
+  $("#jog-plus").addEventListener("click", () => jog(1));
+}
+
+const KEYS = {
+  ArrowUp: 26, ArrowDown: 31, ArrowLeft: 30, ArrowRight: 32,
+  " ": 23, r: 28, R: 28, Shift: 29, Backspace: 27, Delete: 27,
+  Escape: 27
+};
+function buildKeyboard() {
+  const down = new Set();
+  addEventListener("keydown", (ev) => {
+    if (ev.target && (ev.target.tagName === "INPUT" || ev.target.tagName === "TEXTAREA")) return;
+    if (ev.key === "Shift") { if (!down.has(29)) { down.add(29); press(29, true); } return; }
+    const id = KEYS[ev.key];
+    if (id === undefined) return;
+    if (ev.key === " ") ev.preventDefault();
+    if (down.has(id)) return;
+    down.add(id);
+    press(id, true);
+  });
+  addEventListener("keyup", (ev) => {
+    const id = ev.key === "Shift" ? 29 : KEYS[ev.key];
+    if (id === undefined || !down.has(id)) return;
+    down.delete(id);
+    press(id, false);
+  });
+  addEventListener("blur", () => {
+    for (const id of down) press(id, false);
+    down.clear();
+  });
+}
+
+// --- sprites -------------------------------------------------------------
+// The door serves a mask (w, h, stride, bpp, format) and its bytes.  A sprite
+// is tinted with the colour of the icon op that uses it, so the cache key
+// carries both.
+const spriteBytes = new Map();   // id -> {w,h,stride,bpp,fmt,data}
+const spriteCanvas = new Map();  // id:color -> canvas
+const spriteLoading = new Set();
+
+function loadSprite(id) {
+  if (spriteBytes.has(id) || spriteLoading.has(id)) return;
+  spriteLoading.add(id);
+  fetch("/sprite?id=" + id).then((r) => r.ok ? r.arrayBuffer() : null).then((buf) => {
+    spriteLoading.delete(id);
+    if (!buf || buf.byteLength < 8) return;
+    const dv = new DataView(buf);
+    const sp = {
+      w: dv.getUint16(0, true), h: dv.getUint16(2, true),
+      stride: dv.getUint16(4, true), bpp: dv.getUint8(6), fmt: dv.getUint8(7),
+      data: new Uint8Array(buf, 8)
+    };
+    spriteBytes.set(id, sp);
+    // A frame is not resent while the screen is idle: repaint with the mask.
+    if (S) draw(S);
+  }).catch(() => spriteLoading.delete(id));
+}
+
+function spriteImage(id, color) {
+  const key = id + ":" + color;
+  const cached = spriteCanvas.get(key);
+  if (cached) return cached;
+  const sp = spriteBytes.get(id);
+  if (!sp) { loadSprite(id); return null; }
+  const c = document.createElement("canvas");
+  c.width = sp.w; c.height = sp.h;
+  const g = c.getContext("2d");
+  const img = g.createImageData(sp.w, sp.h);
+  const d = img.data;
+  const rgb = [parseInt(color.slice(1, 3), 16), parseInt(color.slice(3, 5), 16),
+               parseInt(color.slice(5, 7), 16)];
+  const perByte = 8 / sp.bpp;
+  for (let y = 0; y < sp.h; y++) {
+    for (let x = 0; x < sp.w; x++) {
+      const i = y * sp.stride + Math.floor(x / perByte);
+      if (i >= sp.data.length) continue;
+      const b = sp.data[i];
+      let level;
+      if (sp.bpp === 1) level = (b >> (7 - (x % 8))) & 1;
+      else if (sp.bpp === 2) level = (b >> (6 - 2 * (x % 4))) & 3;
+      else if (sp.bpp === 4) level = (b >> (4 - 4 * (x % 2))) & 0xF;
+      else level = b;
+      if (!level) continue;
+      const o = (y * sp.w + x) * 4;
+      d[o] = rgb[0]; d[o + 1] = rgb[1]; d[o + 2] = rgb[2];
+      d[o + 3] = sp.bpp === 8 ? level : Math.round((level / ((1 << sp.bpp) - 1)) * 255);
+    }
+  }
+  g.putImageData(img, 0, 0);
+  spriteCanvas.set(key, c);
+  return c;
+}
+
+// --- drawing -------------------------------------------------------------
+function rgba(color, a) {
+  return "rgba(" + parseInt(color.slice(1, 3), 16) + "," +
+         parseInt(color.slice(3, 5), 16) + "," +
+         parseInt(color.slice(5, 7), 16) + "," + (a / 255) + ")";
+}
+function setBlend(b) {
+  ctx.globalCompositeOperation = b === 1 ? "lighter" : "source-over";
+}
+
+function draw(frame) {
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.globalCompositeOperation = "source-over";
+  while (clipDepth > 0) { ctx.restore(); clipDepth--; }
+  ctx.save();
+  clipDepth = 1;
+
+  for (const op of frame.ops) {
+    switch (op.op) {
+      case "clear":
+        setBlend(0);
+        ctx.fillStyle = rgba(op.color, op.a);
+        ctx.fillRect(0, 0, 800, 480);
+        break;
+      case "scissor":
+        ctx.restore();
+        ctx.save();
+        clipDepth = 1;
+        ctx.beginPath();
+        ctx.rect(op.x, op.y, op.w, op.h);
+        ctx.clip();
+        break;
+      case "rect":
+        setBlend(op.blend);
+        ctx.fillStyle = rgba(op.color, op.a);
+        ctx.fillRect(op.x, op.y, op.w, op.h);
+        break;
+      case "gradient": {
+        setBlend(op.blend);
+        let paint;
+        if (op.x0 === op.x1 && op.y0 === op.y1) {
+          paint = rgba(op.color, op.a);
+        } else {
+          paint = ctx.createLinearGradient(op.x0, op.y0, op.x1, op.y1);
+          paint.addColorStop(0, rgba(op.color, op.a));
+          paint.addColorStop(1, rgba(op.color2, op.a));
+        }
+        ctx.fillStyle = paint;
+        ctx.fillRect(op.x, op.y, op.w, op.h);
+        break;
+      }
+      case "line":
+        setBlend(op.blend);
+        ctx.strokeStyle = rgba(op.color, op.a);
+        ctx.lineWidth = Math.max(1, op.w);
+        ctx.lineCap = "butt";
+        ctx.beginPath();
+        ctx.moveTo(op.x, op.y);
+        ctx.lineTo(op.x2, op.y2);
+        ctx.stroke();
+        break;
+      case "point":
+        setBlend(op.blend);
+        ctx.fillStyle = rgba(op.color, op.a);
+        ctx.fillRect(op.x - (op.d >> 1), op.y - (op.d >> 1), op.d, op.d);
+        break;
+      case "text": {
+        setBlend(op.blend);
+        ctx.fillStyle = rgba(op.color, op.a);
+        ctx.font = op.px + 'px "DejaVu Sans Mono",ui-monospace,monospace';
+        ctx.textAlign = "left";
+        ctx.textBaseline = "alphabetic";
+        const xs = op.xs && op.xs.length ? op.xs : null;
+        const base = op.y + op.px - 3;
+        for (let i = 0; i < op.s.length; i++) {
+          let ch = op.s[i];
+          const code = op.s.charCodeAt(i);
+          if (code < 32 || code === 127) ch = " ";
+          else if (code > 126) ch = "?";
+          ctx.fillText(ch, xs && i < xs.length ? xs[i] : op.x, base);
+        }
+        break;
+      }
+      case "icon": {
+        setBlend(op.blend);
+        const img = spriteImage(op.sprite, op.color);
+        if (!img) break;
+        ctx.globalAlpha = op.a / 255;
+        ctx.drawImage(img, op.x, op.y);
+        ctx.globalAlpha = 1;
+        break;
+      }
+    }
+  }
+  ctx.globalCompositeOperation = "source-over";
+  ctx.restore();
+  clipDepth = 0;
+  $("#st-seq").textContent = frame.seq;
+  $("#st-ops").textContent = frame.ops.length;
+}
+
+// --- text face ------------------------------------------------------------
+// The same frame as a character grid, 80x24 cells over 800x480, the shape
+// GET /text serves to targets that cannot draw the display list.  Runs are
+// placed by their start and kept consecutive, so words stay intact despite
+// the firmware's two glyph pitches (10 px at 22 px, 8 px at 19 px).
+const TEXT_COLS = 80, TEXT_ROWS = 24;
+const textFace = $("#textface");
+let face = "draw";
+
+function frameText(f) {
+  // Group by baseline but keep draw order inside a line, so a label drawn
+  // over placeholder cells replaces them.
+  const lines = [];
+  for (const op of f.ops) {
+    if (op.op !== "text" || !op.s) continue;
+    let line = lines.find((l) => Math.abs(l.y - op.y) <= 6);
+    if (!line) lines.push(line = { y: op.y, runs: [] });
+    line.runs.push(op);
+  }
+  lines.sort((a, b) => a.y - b.y);
+  const cell = 800 / TEXT_COLS;
+  const out = new Array(TEXT_ROWS).fill("");
+  lines.forEach((line, li) => {
+    const row = new Array(TEXT_COLS).fill(" ");
+    for (const op of line.runs) {
+      const start = Math.round(op.x / cell);
+      for (let i = 0; i < op.s.length; i++) {
+        const x = start + i;
+        if (x < 0 || x >= TEXT_COLS) continue;
+        const ch = op.s.charCodeAt(i);
+        row[x] = (ch < 32 || ch > 126) ? " " : op.s[i];
+      }
+    }
+    const r = lines.length <= TEXT_ROWS ? li : Math.floor(li * TEXT_ROWS / lines.length);
+    out[r] = row.join("").replace(/\s+$/, "");
+  });
+  let last = out.length;
+  while (last > 0 && out[last - 1] === "") last--;
+  return out.slice(0, last).join("\n");
+}
+
+function showFace(name) {
+  face = name;
+  for (const b of document.querySelectorAll("#face-tabs button"))
+    b.classList.toggle("on", b.dataset.face === name);
+  $(".lcd-bezel").classList.toggle("hidden", name !== "draw");
+  textFace.classList.toggle("on", name === "text");
+  if (name === "text" && S) textFace.textContent = frameText(S);
+}
+for (const b of document.querySelectorAll("#face-tabs button"))
+  b.addEventListener("click", () => showFace(b.dataset.face));
+
+// --- frames --------------------------------------------------------------
+function onFrame(f) {
+  S = f;
+  lastSeq = f.seq;
+  frames++;
+  const now = performance.now();
+  if (now - fpsAt >= 1000) {
+    fps = Math.round(frames * 1000 / (now - fpsAt));
+    frames = 0; fpsAt = now;
+    $("#st-fps").textContent = fps;
+  }
+  for (const sp of f.sprites || []) loadSprite(sp.id);
+  draw(f);
+  if (face === "text") textFace.textContent = frameText(f);
+}
+
+let es = null;
+function setLink(state) {
+  const box = $("#st-link");
+  box.classList.toggle("connected", state === "connected");
+  box.querySelector(".indicator-text").textContent = state;
+  const dot = $("#link-dot");
+  dot.className = "dot" + (state === "connected" ? " live" : state === "reconnecting" ? " dead" : "");
+  $("#st-link-text").textContent = state;
+}
+function connect() {
+  setLink("connecting");
+  if (location.protocol === "file:") return;
+  es = new EventSource("/events");
+  es.onopen = () => setLink("connected");
+  es.onerror = () => {
+    setLink("reconnecting");
+    es.close();
+    setTimeout(connect, 1000);
+  };
+  es.onmessage = (ev) => {
+    let f;
+    try { f = JSON.parse(ev.data); } catch (e) { return; }
+    if (f && f.t === "frame" && f.seq !== lastSeq) onFrame(f);
+  };
+}
+
+// --- views ---------------------------------------------------------------
+// Main is the instrument; Debug is the wire under it. The hidden view is
+// display:none rather than removed, so its listeners and the log keep running.
+function showScene(name) {
+  for (const scene of document.querySelectorAll(".scene"))
+    scene.classList.toggle("active", scene.id === "scene-" + name);
+  for (const item of document.querySelectorAll(".nav-item"))
+    item.classList.toggle("active", item.dataset.scene === name);
+  openMenu(false);
+}
+function openMenu(open) {
+  const menu = $("#menu"), overlay = $("#menu-overlay"), btn = $("#menu-btn");
+  menu.classList.toggle("open", open);
+  overlay.classList.toggle("active", open);
+  btn.setAttribute("aria-expanded", String(open));
+  menu.setAttribute("aria-hidden", String(!open));
+  menu.toggleAttribute("inert", !open);
+}
+function wireMenu() {
+  $("#menu-btn").addEventListener("click", () =>
+    openMenu(!$("#menu").classList.contains("open")));
+  $("#menu-close").addEventListener("click", () => openMenu(false));
+  $("#menu-overlay").addEventListener("click", () => openMenu(false));
+  for (const item of document.querySelectorAll(".nav-item"))
+    item.addEventListener("click", () => showScene(item.dataset.scene));
+  addEventListener("keydown", (e) => { if (e.key === "Escape") openMenu(false); });
+  openMenu(false);
+}
+
+buildControls();
+buildKeyboard();
+wireMenu();
+$("#restart").addEventListener("click", () => {
+  log("restart requested");
+  req({t:"restart"});
+});
+releaseAll();   // a fresh page starts from nothing held
+connect();
+// The stream only carries frames when the firmware swaps; paint the current
+// one straight away so the face is not blank while the screen is idle.
+fetch("/state").then((r) => r.json()).then((f) => { if (!lastSeq && f && f.t === "frame") onFrame(f); })
+  .catch(() => {});
+</script>
+</body>
+</html>

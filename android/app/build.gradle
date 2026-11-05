@@ -1,0 +1,67 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Gerard Braad (Regroove | RGRV)
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'nl.rgrv.ptpocket'
+    compileSdk 33
+    // Pinned so the build does not follow AGP's default NDK.
+    ndkVersion '23.1.7779620'
+
+    defaultConfig {
+        applicationId "nl.rgrv.ptpocket"
+        minSdk 26
+        // Android 10 (API 29) removed execve from the app domain for targetSdk
+        // 29 and above. The firmware executes from the app data directory, so
+        // this stays at 28.
+        targetSdk 28
+        versionCode 1
+        versionName "1.0"
+
+        ndk {
+            // 32-bit only: the firmware is armhf and runs as a child of this
+            // process.
+            abiFilters 'armeabi-v7a'
+        }
+
+        externalNativeBuild {
+            cmake {
+                cppFlags '-std=c++17'
+                arguments '-DANDROID_STL=c++_shared',
+                          '-DCMAKE_BUILD_TYPE=Debug',
+                          '-DCMAKE_C_FLAGS=-O1',
+                          '-DCMAKE_CXX_FLAGS=-O1'
+                targets "main"
+            }
+        }
+    }
+
+    buildFeatures {
+        prefab true
+    }
+
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path file('src/main/cpp/CMakeLists.txt')
+            version '3.22.1'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+        coreLibraryDesugaringEnabled true
+    }
+}
+
+dependencies {
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.3'
+}

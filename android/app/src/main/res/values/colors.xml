@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: MIT -->
+<!-- Copyright (c) 2026 Gerard Braad (Regroove | RGRV) -->
+<!--
+    The panel's palette as Android colours: the background from main.cpp's
+    glClearColor, the button and label greys from panel.cpp, and the red from
+    the panel's banner.
+
+    AAPT rejects a comment containing a double hyphen.
+-->
+<resources>
+
+    <!-- The banner red. -->
+    <color name="colorPrimary">#CF1A37</color>
+
+    <!-- The same red when pressed. -->
+    <color name="colorPrimaryPressed">#E83352</color>
+
+    <!-- main.cpp: glClearColor(0.055, 0.06, 0.07). -->
+    <color name="colorBackground">#0E0F12</color>
+
+    <!-- A shade above the background, for file rows. -->
+    <color name="colorSurface">#1E2024</color>
+
+    <!-- panel.cpp: the button fill, IM_COL32(38, 40, 44, 255). -->
+    <color name="colorButton">#26282C</color>
+
+    <!-- panel.cpp: the label grey, IM_COL32(150, 155, 165, 255). -->
+    <color name="colorSecondaryText">#969BA5</color>
+
+    <!-- panel.cpp: the label white, IM_COL32(220, 224, 230, 255). -->
+    <color name="colorOnBackground">#DCE0E6</color>
+
+</resources>

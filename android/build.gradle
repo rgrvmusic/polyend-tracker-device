@@ -1,0 +1,11 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Gerard Braad (Regroove | RGRV)
+// AGP 7.4.2 is pinned because the build cannot reach Google Maven and
+// resolves the plugin from its offline cache.
+plugins {
+    id 'com.android.application' version '7.4.2' apply false
+}
+
+tasks.register('clean', Delete) {
+    delete rootProject.buildDir
+}

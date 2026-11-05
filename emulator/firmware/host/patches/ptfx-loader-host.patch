@@ -1,0 +1,16 @@
+--- ptfx_loader.cpp
++++ ptfx_loader.cpp
+@@ -100,6 +100,13 @@
+ 
+ void PtfxLoader::syncInstructionCache([[maybe_unused]] void* addr, [[maybe_unused]] uint32_t size)
+ {
++#ifdef TRACKER_HOST
++    // The Linux kernel owns the caches; make the freshly written Thumb code
++    // visible to the instruction fetcher of this core.
++    __builtin___clear_cache(reinterpret_cast<char*>(addr),
++                            reinterpret_cast<char*>(addr) + size);
++    return;
++#endif
+     asm volatile("dsb 0xf" ::: "memory");
+     asm volatile("isb 0xf" ::: "memory");
+ 

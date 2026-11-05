@@ -1,0 +1,4 @@
+[submodule "tracker-ce"]
+	path = tracker-ce
+	url = https://github.com/rgrvmusic/polyend-tracker-ce.git
+	branch = main
