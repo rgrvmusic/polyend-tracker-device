@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>PT Pocket - Polyend Tracker Mini CE for Android</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,400;0,700;0,900;1,400&display=swap">
+  <style>
+    /* Itch-style release page: dark bar, light sheet, green download action. */
+    :root {
+      --bg: #000000;
+      --surface: #ffffff;
+      --surface-soft: #f6f6f6;
+      --ink: #1e1e1e;
+      --muted: #666666;
+      --line: #d7d7d7;
+      --bar: #2b2b2b;
+      --bar-ink: #f4f4f4;
+      --accent: #4caf50;
+      --accent-hover: #3f9444;
+      --accent-ink: #ffffff;
+      --link: #2f7d32;
+      --focus: #4caf50;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #000000;
+        --surface: #1d1d1d;
+        --surface-soft: #242424;
+        --ink: #f1f1f1;
+        --muted: #a3a3a3;
+        --line: #343434;
+        --bar: #0d0d0d;
+        --bar-ink: #f4f4f4;
+        --accent: #4caf50;
+        --accent-hover: #5cbc60;
+        --accent-ink: #0f1a0f;
+        --link: #8fd694;
+        --focus: #7ed684;
+        --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+        color-scheme: dark;
+      }
+    }
+
+    :root[data-theme="dark"] {
+      --bg: #000000;
+      --surface: #1d1d1d;
+      --surface-soft: #242424;
+      --ink: #f1f1f1;
+      --muted: #a3a3a3;
+      --line: #343434;
+      --bar: #0d0d0d;
+      --bar-ink: #f4f4f4;
+      --accent: #4caf50;
+      --accent-hover: #5cbc60;
+      --accent-ink: #0f1a0f;
+      --link: #8fd694;
+      --focus: #7ed684;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+      color-scheme: dark;
+    }
+
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Lato, LatoExtended, "Helvetica Neue", Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    a {
+      color: var(--link);
+    }
+
+    a:focus-visible,
+    button:focus-visible {
+      outline: 2px solid var(--focus);
+      outline-offset: 3px;
+    }
+
+    .page {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 34px 20px 64px;
+      padding-left: max(20px, env(safe-area-inset-left, 0px));
+      padding-right: max(20px, env(safe-area-inset-right, 0px));
+    }
+
+    .sheet {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      padding: 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+    }
+
+    .hero {
+      display: flex;
+      align-items: center;
+      gap: 22px;
+      flex-wrap: wrap;
+    }
+
+    .hero-copy {
+      min-width: 0;
+      flex: 1 1 260px;
+    }
+
+    .eyebrow {
+      margin: 0 0 6px;
+      color: var(--muted);
+      font-size: 0.75rem;
+      font-weight: 900;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(2rem, 7vw, 3.2rem);
+      line-height: 1.05;
+      font-weight: 900;
+      letter-spacing: -0.02em;
+      text-wrap: balance;
+    }
+
+    .pronounce {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 1rem;
+      font-style: italic;
+    }
+
+    .description {
+      margin: 0;
+      font-size: 1.06rem;
+      line-height: 1.68;
+      color: var(--ink);
+    }
+
+    .description a {
+      font-weight: 700;
+      text-decoration-thickness: 1px;
+      text-underline-offset: 2px;
+    }
+
+    .download {
+      background: var(--surface-soft);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .download-main {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 13px 22px;
+      background: var(--accent);
+      color: var(--accent-ink);
+      border: 0;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 1rem;
+      font-weight: 900;
+      letter-spacing: 0.01em;
+      text-decoration: none;
+      cursor: pointer;
+      box-shadow: 0 1px 0 rgba(0, 0, 0, 0.12);
+      transition: background-color 0.15s ease, transform 0.15s ease;
+    }
+
+    .button:hover {
+      background: var(--accent-hover);
+    }
+
+    .button:active {
+      transform: translateY(1px);
+    }
+
+    .button svg {
+      width: 18px;
+      height: 18px;
+      flex: 0 0 auto;
+    }
+
+    .version {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      color: var(--muted);
+      font-size: 0.82rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .version::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    .links {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 18px;
+      font-size: 0.95rem;
+    }
+
+    .links a {
+      font-weight: 700;
+      text-underline-offset: 2px;
+    }
+
+    .note {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.88rem;
+      line-height: 1.5;
+    }
+
+    .footer {
+      max-width: 840px;
+      margin: 0 auto;
+      padding: 0 20px 40px;
+      padding-left: max(20px, env(safe-area-inset-left, 0px));
+      padding-right: max(20px, env(safe-area-inset-right, 0px));
+      color: var(--muted);
+      font-size: 0.84rem;
+      line-height: 1.55;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 16px;
+      justify-content: space-between;
+    }
+
+    @media (max-width: 560px) {
+      .page {
+        padding-top: 20px;
+      }
+
+      .sheet {
+        padding: 22px;
+        gap: 22px;
+      }
+
+      .hero {
+        gap: 16px;
+      }
+
+      .app-icon {
+        width: 72px;
+        height: 72px;
+        padding: 8px;
+        gap: 4px;
+      }
+
+      .download {
+        padding: 18px;
+      }
+
+      .button {
+        width: 100%;
+      }
+
+      .bar-note {
+        display: none;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .button {
+        transition: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="sheet">
+      <div class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Polyend Tracker Mini CE for Android</p>
+          <h1>PT Pocket</h1>
+        </div>
+      </div>
+
+      <p class="description">
+        This is a binary release of
+        <a href="https://github.com/rgrvmusic/polyend-tracker-device" target="_blank" rel="noopener">rgrvmusic/polyend-tracker-device</a>'s PT Pocket (pronounced: PetPocket).
+      </p>
+
+      <div class="download">
+        <div class="download-main">
+          <a class="button" href="https://github.com/rgrvmusic/polyend-tracker-device/releases/latest/download/ptpocket.apk" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 3v12"></path>
+              <path d="m7 10 5 5 5-5"></path>
+              <path d="M5 21h14"></path>
+            </svg>
+            Download latest APK
+          </a>
+          <span class="version">Latest release</span>
+        </div>
+        <div class="links">
+          <a href="https://github.com/rgrvmusic/polyend-tracker-device/releases" target="_blank" rel="noopener">All releases</a>
+          <a href="https://github.com/rgrvmusic/polyend-tracker-device" target="_blank" rel="noopener">Source on GitHub</a>
+          <a href="https://rgrvdotnl.itch.io/ptpocket-android" target="_blank" rel="noopener">Project page</a>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
